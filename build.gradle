@@ -1,0 +1,264 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+import groovyx.gpars.GParsPool
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'org.codehaus.gpars:gpars:1.0-beta-1'
+    }
+}
+
+task copyImages(type: Copy) {
+    from 'images'
+    into 'build/images'
+    include '*.*'
+}
+
+task copyHtmlFiles(type: Copy, dependsOn: [copyImages]) {
+    from '.'
+    into 'build'
+    include '*.html'
+    include 'js/**/*.png'
+}
+
+task copyAppIcon(type: Copy) {
+    from 'distribution'
+    into 'build'
+    include 'icons/**/*.png'
+}
+
+task copySplashes(type: Copy) {
+    from 'distribution'
+    into 'build'
+    include 'splashes/**/*.png'
+}
+
+task copyPhonegapConfig(type: Copy) {
+    from '.'
+    into 'build'
+    include 'config.xml'
+}
+
+def compress(String type, String baseDirectory) {
+    def elementsToMinify = []
+    fileTree {
+        from baseDirectory
+        include "**/*.$type"
+    }.visit { element ->
+        if (element.file.isFile()) {
+            elementsToMinify << element
+        }
+    }
+
+    elementsToMinify.each { element ->
+        println "Minifying ${element.relativePath}"
+        def outputFileLocation = "build/$baseDirectory/${element.relativePath}"
+        new File(outputFileLocation).parentFile.mkdirs()
+        minify("$baseDirectory/${element.relativePath}", outputFileLocation)
+    }
+}
+
+def minify(String input, String output) {
+    ant.java(jar: "lib/yuicompressor-2.4.7.jar", fork: true) {
+        arg(value: input)
+        arg(value: "-o")
+        arg(value: output)
+    }
+}
+
+task compressJs {
+    inputs.dir new File('js')
+    outputs.dir new File('build/js')
+
+    doLast {
+        compress('js', 'js')
+    }
+}
+
+task compressCss {
+    inputs.dir new File('css')
+    inputs.dir new File('js')
+    outputs.dir new File('build/css')
+    outputs.dir new File('build/js')
+
+    doLast {
+        compress('css', 'css')
+        compress('css', 'js')
+    }
+}
+
+task copyCss(type: Copy) {
+    from '.'
+    into 'build'
+    include 'css/**/*.css'
+    include 'js/**/*.css'
+}
+
+defaultTasks 'clean', 'build'
+
+task clean << {
+    String gitBackupDirectory = 'build-backup-git'
+    mkdir(gitBackupDirectory)
+    copy {
+        from 'build/.git'
+        into gitBackupDirectory
+    }
+    delete('build')
+    mkdir('build')
+    mkdir('build/.git')
+
+    copy {
+        from gitBackupDirectory
+        into 'build/.git'
+    }
+
+    delete gitBackupDirectory
+}
+
+task build(dependsOn: [copyHtmlFiles, copyPhonegapConfig, copyAppIcon, copySplashes, compressJs, copyCss]) << {
+}
+
+task test() << {
+    List<File> tests = []
+    new File('./test').eachFileRecurse {
+        if (it.name.endsWith('.feature')) {
+            tests << it
+        }
+    }
+
+
+    GParsPool.withPool(4) {
+        tests.eachParallel { File test ->
+            exec {
+                commandLine= ['cucumber', test.getAbsolutePath(), '-f', 'progress']
+                workingDir = new File('./test')
+            }
+        }
+    }
+}
+
+def getGitStatus() {
+    def p = ['git', 'status'].execute()
+    p.waitFor()
+    p.text
+}
+
+def gitHasNoChangesToCommit() {
+    String gitStatus = getGitStatus()
+    return gitStatus.contains('no changes added to commit') || gitStatus.contains('nothing to commit')
+}
+
+def incrementJsVersion() {
+    File versionFile = new File('js/version.js')
+    String oldVersionCallback = versionFile.text
+    def versionPattern = /version=(\d+);/
+    def matcher = (oldVersionCallback =~ versionPattern)
+    long version = matcher[0][1] as long
+    version++;
+    String newVersionCallback = oldVersionCallback.replaceAll(versionPattern, 'version=' + version + ';')
+
+    versionFile.withWriter { w ->
+        w.write(newVersionCallback);
+    }
+    return version
+}
+
+def incrementConfigVersion() {
+    File configFile = new File('config.xml')
+    String oldConfig = configFile.text
+    def versionPattern = /version="(\d+)"/
+    def matcher = (oldConfig =~ versionPattern)
+    long newVersion = (matcher[0][1] as long) + 1
+
+    def versionCodePattern = /versionCode="(\d+)"/
+    matcher = (oldConfig =~ versionCodePattern)
+    long newVersionCode = (matcher[0][1] as long) + 1
+
+    String newConfig = oldConfig.replaceAll(versionPattern,
+            'version="' + newVersion + '"').replaceAll(versionCodePattern, 'versionCode="' + newVersionCode + '"')
+
+    configFile.withWriter { w ->
+        w.write(newConfig);
+    }
+    return newVersion
+}
+
+task version << {
+    if (!gitHasNoChangesToCommit()) {
+        throw new GradleException("There are git changes to commit. Commit or unstage changes to version this release.")
+    }
+    else {
+        def version = incrementJsVersion()
+        incrementConfigVersion()
+
+        exec {
+            commandLine = ['git', 'add', 'js/version.js', 'config.xml']
+        }
+        exec {
+            commandLine = ['git', 'commit', '-m', 'Incrementing build version']
+        }
+        exec {
+            commandLine = ['git', 'tag', version]
+        }
+    }
+}
+
+task deploy(dependsOn: ['build']) << {
+    exec {
+        commandLine = ['git', 'add', '-u']
+        workingDir = new File('./build')
+    }
+    exec {
+        commandLine = ['git', 'add', '.']
+        workingDir = new File('./build')
+    }
+    exec {
+        commandLine = ['git', 'commit', '-m', '"Building"']
+        workingDir = new File('./build')
+    }
+    exec {
+        commandLine = ['git', 'push', 'build', 'master']
+        workingDir = new File('./build')
+    }
+}
+
+def execAndGetResult(def command) {
+    def output = new ByteArrayOutputStream()
+    println "Executing ${command}"
+    exec {
+        commandLine = command
+        standardOutput = output
+    }
+    return new JsonSlurper().parseText(output.toString())
+}
+
+final String PHONEGAP_BUILD_API_URL = "https://build.phonegap.com"
+String authToken = null
+task getAuthToken() << {
+    def authenticationResponse = execAndGetResult(['curl', '-u', 'stefankendall@gmail.com', '-X', 'POST', '-d', '""', "${PHONEGAP_BUILD_API_URL}/token"])
+    authToken = authenticationResponse.token
+}
+
+task binaries(dependsOn: [getAuthToken]) << {
+    delete('binaries')
+    def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
+
+    String getIosDownloadUrlRequest = allAppsResult.apps[0].download.ios
+    String getAndroidDownloadUrlRequest = allAppsResult.apps[0].download.android
+
+    [getIosDownloadUrlRequest, getAndroidDownloadUrlRequest].each {
+        def downloadLocationResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}${it}?auth_token=${authToken}"])
+        exec {
+            commandLine = ['wget', downloadLocationResult.location, '-P', 'binaries']
+        }
+    }
+}
+
+task buildStatus(dependsOn: [getAuthToken]) << {
+    def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
+    println JsonOutput.prettyPrint(JsonOutput.toJson(allAppsResult.apps[0].status))
+}
