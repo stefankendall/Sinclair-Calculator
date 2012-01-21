@@ -247,8 +247,8 @@ task binaries(dependsOn: [getAuthToken]) << {
     delete('binaries')
     def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
 
-    String getIosDownloadUrlRequest = allAppsResult.apps[0].download.ios
-    String getAndroidDownloadUrlRequest = allAppsResult.apps[0].download.android
+    String getIosDownloadUrlRequest = allAppsResult.apps[1].download.ios
+    String getAndroidDownloadUrlRequest = allAppsResult.apps[1].download.android
 
     [getIosDownloadUrlRequest, getAndroidDownloadUrlRequest].each {
         def downloadLocationResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}${it}?auth_token=${authToken}"])
@@ -260,5 +260,5 @@ task binaries(dependsOn: [getAuthToken]) << {
 
 task buildStatus(dependsOn: [getAuthToken]) << {
     def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
-    println JsonOutput.prettyPrint(JsonOutput.toJson(allAppsResult.apps[0].status))
+    println JsonOutput.prettyPrint(JsonOutput.toJson(allAppsResult.apps[1].status))
 }
