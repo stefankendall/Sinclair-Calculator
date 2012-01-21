@@ -28,14 +28,9 @@ sinclair.updateOutput = function () {
         liftTotalKg = conversion.lbsToKg(parseFloat(values['lift-total']));
     }
 
-    var sinclairValue = formulas.sinclair(bodyWeightKg, liftTotalKg, sex);
     var sinclairAdjusted = formulas.sinclairMaloneMeltzer(bodyWeightKg, liftTotalKg, sex, parseInt(age));
-    sinclairValue = isNaN(sinclairValue) ? 0 : sinclairValue;
     sinclairAdjusted = isNaN(sinclairAdjusted) ? 0 : sinclairAdjusted;
 
-    window.test = sinclairValue;
-    Ext.get('sinclair-value').setHTML(sinclair.formatFloatForDisplay(sinclairValue));
-    sinclair.updateCorrection();
     Ext.get('sinclair-adjusted').setHTML(sinclair.formatFloatForDisplay(sinclairAdjusted));
 };
 
@@ -43,12 +38,9 @@ sinclair.outputArea = {
     xtype:'panel',
     id:'output',
     flex:1,
-    bodyStyle: 'padding: 4px 13px 13px 13px',
-    html:"<table width='100%'><tbody>" +
-        "<tr><td width = '66%' class='title'>Sinclair</td><td width='50%' class='value' id='sinclair-value'></td></tr>" +
-        "<tr><td class='title'>Correction</td><td class='value' id='adjustment-factor'></td></tr>" +
-        "<tr><td class='title'>Adjusted</td><td class='value' id='sinclair-adjusted'></td></tr>" +
-        "</tbody></table>"
+    bodyStyle: 'padding: 7px',
+    html:"<div>Sinclair</div>" +
+        "<div class='value' id='sinclair-adjusted'></div>"
 };
 
 sinclair.inputForm = {
