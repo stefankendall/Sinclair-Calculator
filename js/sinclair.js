@@ -1,11 +1,22 @@
 "use strict";
 Ext.ns('sinclair');
 
+sinclair.formatFloatForDisplay = function (value) {
+    return parseInt(Math.round(value * 1000.0)) / 1000.0;
+};
+
+sinclair.updateCorrection = function () {
+    var age = Ext.getCmp('input-form').getValues().age;
+    var correction = formulas.data.maloneMeltzerCorrections[parseInt(age)];
+    correction = correction ? correction : 1;
+    Ext.get('adjustment-factor').setHTML(sinclair.formatFloatForDisplay(correction));
+};
+
 sinclair.updateOutput = function () {
     var values = Ext.getCmp('input-form').getValues();
     var sex = values.sex;
     var units = values.units;
-    var age = values.age;
+    var age = values.age ? values.age : 30;
     var bodyWeightKg = null;
     var liftTotalKg = null;
     if (units === 'kg') {
@@ -17,29 +28,34 @@ sinclair.updateOutput = function () {
         liftTotalKg = conversion.lbsToKg(parseFloat(values['lift-total']));
     }
 
-    var sinclair = formulas.sinclair(bodyWeightKg, liftTotalKg, sex);
+    var sinclairValue = formulas.sinclair(bodyWeightKg, liftTotalKg, sex);
     var sinclairAdjusted = formulas.sinclairMaloneMeltzer(bodyWeightKg, liftTotalKg, sex, parseInt(age));
-    Ext.get('sinclair-value').setHTML(sinclair);
-    Ext.get('adjustment-factor').setHTML(formulas.data.maloneMeltzerCorrections[parseInt(age)]);
-    Ext.get('sinclair-adjusted').setHTML(sinclairAdjusted);
+    sinclairValue = isNaN(sinclairValue) ? 0 : sinclairValue;
+    sinclairAdjusted = isNaN(sinclairAdjusted) ? 0 : sinclairAdjusted;
+
+    window.test = sinclairValue;
+    Ext.get('sinclair-value').setHTML(sinclair.formatFloatForDisplay(sinclairValue));
+    sinclair.updateCorrection();
+    Ext.get('sinclair-adjusted').setHTML(sinclair.formatFloatForDisplay(sinclairAdjusted));
 };
 
 sinclair.outputArea = {
     xtype:'panel',
-    layout:'fit',
     id:'output',
     flex:1,
-    bodyPadding:13,
-    html:
-        "<table width='100%'><tbody>" +
-        "<tr><td width = '50%' class='title'>Sinclair</td><td width='50%' class='value' id='sinclair-value'></td></tr>" +
-        "<tr><td class='title'>Correction</td><td class='value' id='adjustment-factor'>1.00</td></tr>" +
+    bodyStyle: 'padding: 4px 13px 13px 13px',
+    html:"<table width='100%'><tbody>" +
+        "<tr><td width = '66%' class='title'>Sinclair</td><td width='50%' class='value' id='sinclair-value'></td></tr>" +
+        "<tr><td class='title'>Correction</td><td class='value' id='adjustment-factor'></td></tr>" +
         "<tr><td class='title'>Adjusted</td><td class='value' id='sinclair-adjusted'></td></tr>" +
         "</tbody></table>"
 };
 
 sinclair.inputForm = {
-    flex:1,
+    listeners:{
+        afterrender:sinclair.updateOutput
+    },
+    flex:2,
     xtype:'formpanel',
     id:'input-form',
     items:[
@@ -47,7 +63,10 @@ sinclair.inputForm = {
             xtype:'fieldset',
             style:'margin-top:0px;margin-bottom:7px',
             defaults:{
-                labelWidth:'50%'
+                labelWidth:'50%',
+                listeners:{
+                    change:sinclair.updateOutput
+                }
             },
             items:[
                 {
@@ -67,12 +86,14 @@ sinclair.inputForm = {
                 {
                     name:'bodyweight',
                     xtype:'numberfield',
-                    label:'Body Weight'
+                    label:'Body Weight',
+                    value: 72
                 },
                 {
                     name:'age',
                     xtype:'numberfield',
-                    label:'Age'
+                    label:'Age',
+                    value:30
                 },
                 {
                     name:'units',
@@ -84,23 +105,6 @@ sinclair.inputForm = {
                     ]
                 }
             ]
-        },
-        {
-            xtype:'button',
-            text:'Go!',
-            ui:'confirm',
-            handler:sinclair.updateOutput
         }
     ]
 };
-sinclair.MainForm = Ext.extend(Ext.Panel, {
-    fullscreen:true,
-    layout:{
-        type:'vbox',
-        align:'stretch'
-    },
-    items:[
-        sinclair.outputArea,
-        sinclair.inputForm
-    ]
-});

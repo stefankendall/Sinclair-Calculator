@@ -3,3 +3,9 @@
     background-color: #555;
     border-bottom: solid 5px grey;
 }
+
+.title, .value {
+    font-weight: bolder;
+    font-size: 1.5em;
+    line-height: 1.5em;
+}
