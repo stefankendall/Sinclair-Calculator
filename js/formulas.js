@@ -3,11 +3,11 @@ Ext.ns('formulas.util',
     'formulas.data');
 
 formulas.sinclair = function (bodyWeightKg, liftTotalKg, sex) {
-    //http://www.qwa.org/Liftstats/2009Sinclair.pdf
-    var b = sex == "male" ? 173.961 : 125.441;
+    //http://www.qwa.org/Resources/docs/Sinclair_Coefficients_2013.pdf
+    var b = sex == "male" ? 174.393 : 148.026;
     var x = bodyWeightKg;
     var X = formulas.util.log10(x / b);
-    var A = sex == "male" ? 0.784780654 : 1.056683941;
+    var A = sex == "male" ? 0.794358141 : 0.897260740;
 
     var sinclairCoefficient = x > b ? 1 : Math.pow(10,
         A * X * X);
