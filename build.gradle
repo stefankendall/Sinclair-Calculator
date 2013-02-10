@@ -1,5 +1,4 @@
 import groovy.json.JsonSlurper
-import groovy.json.JsonOutput
 import groovyx.gpars.GParsPool
 
 buildscript {
@@ -8,7 +7,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'org.codehaus.gpars:gpars:1.0-beta-1'
+        classpath 'org.codehaus.gpars:gpars:1.0-beta-3'
     }
 }
 
@@ -37,16 +36,9 @@ task copySplashes(type: Copy) {
     include 'splashes/**/*.png'
 }
 
-task copyPhonegapConfig(type: Copy) {
-    from '.'
-    into 'build'
-    include 'config.xml'
-}
-
 def compress(String type, String baseDirectory) {
     def elementsToMinify = []
-    fileTree {
-        from baseDirectory
+    fileTree(baseDirectory) {
         include "**/*.$type"
     }.visit { element ->
         if (element.file.isFile()) {
@@ -54,20 +46,40 @@ def compress(String type, String baseDirectory) {
         }
     }
 
-    elementsToMinify.each { element ->
-        println "Minifying ${element.relativePath}"
-        def outputFileLocation = "build/$baseDirectory/${element.relativePath}"
-        new File(outputFileLocation).parentFile.mkdirs()
-        minify("$baseDirectory/${element.relativePath}", outputFileLocation)
+    def ignoredFileNames = ['touch-charts.js', 'sencha-touch-all.js', 'date.js']
+
+    GParsPool.withPool(4) {
+        elementsToMinify.eachParallel { element ->
+            def outputFileLocation = "build/$baseDirectory/${element.relativePath}"
+            new File(outputFileLocation).parentFile.mkdirs()
+
+            def inputFile = "$baseDirectory/${element.relativePath}"
+
+            boolean closureIssueFiles = ignoredFileNames.any { element.relativePath.toString().contains(it) }
+            if (closureIssueFiles) {
+                minifyWithYui(inputFile, outputFileLocation)
+            }
+            else {
+                minifyWithClosure(inputFile, outputFileLocation)
+            }
+        }
     }
 }
 
-def minify(String input, String output) {
-    ant.java(jar: "lib/yuicompressor-2.4.7.jar", fork: true) {
-        arg(value: input)
-        arg(value: "-o")
-        arg(value: output)
-    }
+def execute_process(command) {
+    def proc = command.execute(null, new File(System.properties['user.dir']))
+    proc.consumeProcessOutput(System.out, System.err)
+    proc.waitFor()
+}
+
+def minifyWithClosure(String input, String output) {
+    println "Minifying ${input}"
+    execute_process "java -jar lib/compiler.jar --js ${input} --js_output_file ${output}"
+}
+
+def minifyWithYui(String input, String output) {
+    println "Minifying ${input}"
+    execute_process "java -jar lib/yuicompressor-2.4.7.jar ${input} -o ${output}"
 }
 
 task compressJs {
@@ -79,16 +91,54 @@ task compressJs {
     }
 }
 
-task compressCss {
-    inputs.dir new File('css')
-    inputs.dir new File('js')
-    outputs.dir new File('build/css')
-    outputs.dir new File('build/js')
+task copyWithoutCompress(type: Copy) {
+    from '.'
+    into 'build'
+    include 'js/**/*.js'
+}
 
-    doLast {
-        compress('css', 'css')
-        compress('css', 'js')
+def getJsFilesFrom(File htmlFile) {
+    def htmlFileText = htmlFile.text
+    def m = htmlFileText =~ /(?m)src=['"](.*?)['"]/
+    return m.collect { new File('build', it[1]) }
+}
+
+def rewriteSingleJsInclude(File htmlFile, String jsFileToAdd) {
+    println "Rewriting JS includes in ${htmlFile.path}"
+    def htmlFileText = htmlFile.text
+    String newHtml = htmlFileText.replaceAll(/(?m)(?s)<!--combine.*end combine-->/, '')
+    def jsInclude = "<script type='text/javascript' src='${jsFileToAdd}'></script>"
+    newHtml = newHtml.replaceAll('</head>', "${jsInclude}</head>")
+    htmlFile.write(newHtml)
+}
+
+def copyAndCombineJs() {
+    StringBuilder combinedJs = new StringBuilder()
+    List<File> orderedJsFiles = getJsFilesFrom(new File('build/index.html'))
+    orderedJsFiles.each { File f ->
+        if (f.exists()) {
+            combinedJs.append(f.text)
+        }
+        else {
+            println "Warning: ${f.path} does not exist"
+        }
     }
+
+    println 'Combination complete. Deleting source files.'
+    orderedJsFiles.each { File f -> f.delete() }
+
+    println 'Creating app.js'
+    new File('build/app.js').append(combinedJs)
+
+    rewriteSingleJsInclude(new File('build/index.html'), 'app.js')
+}
+
+task copyJs(dependsOn: [compressJs]) << {
+    copyAndCombineJs()
+}
+
+task copyJsDebug(dependsOn: [copyWithoutCompress]) << {
+    copyAndCombineJs()
 }
 
 task copyCss(type: Copy) {
@@ -97,8 +147,6 @@ task copyCss(type: Copy) {
     include 'css/**/*.css'
     include 'js/**/*.css'
 }
-
-defaultTasks 'clean', 'build'
 
 task clean << {
     String gitBackupDirectory = 'build-backup-git'
@@ -119,40 +167,18 @@ task clean << {
     delete gitBackupDirectory
 }
 
-task build(dependsOn: [copyHtmlFiles, copyPhonegapConfig, copyAppIcon, copySplashes, compressJs, copyCss]) << {
-}
-
-task test() << {
-    List<File> tests = []
-    new File('./test').eachFileRecurse {
-        if (it.name.endsWith('.feature')) {
-            tests << it
-        }
-    }
-
-
-    GParsPool.withPool(4) {
-        tests.eachParallel { File test ->
-            exec {
-                commandLine= ['cucumber', test.getAbsolutePath(), '-f', 'progress']
-                workingDir = new File('./test')
-            }
-        }
+task copySoundFiles() << {
+    copy {
+        from './sounds'
+        into './build/sounds'
+        include '*.*'
     }
 }
 
-def getGitStatus() {
-    def p = ['git', 'status'].execute()
-    p.waitFor()
-    p.text
-}
+task build(dependsOn: [copyHtmlFiles, copyAppIcon, copySplashes, copyJs, copyCss, copySoundFiles]) << {}
+task buildDebug(dependsOn: [copyHtmlFiles, copyAppIcon, copySplashes, copyJsDebug, copyCss, copySoundFiles]) << {}
 
-def gitHasNoChangesToCommit() {
-    String gitStatus = getGitStatus()
-    return gitStatus.contains('no changes added to commit') || gitStatus.contains('nothing to commit')
-}
-
-def incrementJsVersion() {
+task incrementJsVersion << {
     File versionFile = new File('js/version.js')
     String oldVersionCallback = versionFile.text
     def versionPattern = /version=(\d+);/
@@ -164,67 +190,50 @@ def incrementJsVersion() {
     versionFile.withWriter { w ->
         w.write(newVersionCallback);
     }
-    return version
 }
 
-def incrementConfigVersion() {
-    File configFile = new File('config.xml')
+task incrementAndroidVersion << {
+    File configFile = new File('native/android/AndroidManifest.xml')
     String oldConfig = configFile.text
-    def versionPattern = /version="(\d+)"/
-    def matcher = (oldConfig =~ versionPattern)
-    long newVersion = (matcher[0][1] as long) + 1
 
-    def versionCodePattern = /versionCode="(\d+)"/
-    matcher = (oldConfig =~ versionCodePattern)
-    long newVersionCode = (matcher[0][1] as long) + 1
+    def versionPattern = /android:versionName="(\d+)"/
+    long newVersion = ((oldConfig =~ versionPattern)[0][1] as long) + 1
+
+    def versionCodePattern = /android:versionCode="(\d+)"/
+    long newVersionCode = ((oldConfig =~ versionCodePattern)[0][1] as long) + 1
 
     String newConfig = oldConfig.replaceAll(versionPattern,
-            'version="' + newVersion + '"').replaceAll(versionCodePattern, 'versionCode="' + newVersionCode + '"')
+            'android:versionName="' + newVersion + '"').replaceAll(versionCodePattern, 'android:versionCode="' + newVersionCode + '"')
 
     configFile.withWriter { w ->
         w.write(newConfig);
     }
-    return newVersion
 }
 
-task version << {
-    if (!gitHasNoChangesToCommit()) {
-        throw new GradleException("There are git changes to commit. Commit or unstage changes to version this release.")
-    }
-    else {
-        def version = incrementJsVersion()
-        incrementConfigVersion()
+task incrementIosVersion << {
+    List<File> appPlists = [
+            new File('native/ios/Wendler531/Big Lifts-Info.plist'),
+            new File('native/ios/Wendler531/WendlerPro-Info.plist')
+    ]
+    appPlists.each { File appPlist ->
+        String oldPlist = appPlist.text
 
-        exec {
-            commandLine = ['git', 'add', 'js/version.js', 'config.xml']
-        }
-        exec {
-            commandLine = ['git', 'commit', '-m', 'Incrementing build version']
-        }
-        exec {
-            commandLine = ['git', 'tag', version]
+        def shortVersionPattern = /(?ms)<key>CFBundleShortVersionString<\\/key>.*?<string>(.*?)<\\/string>/
+        long newShortVersion = ((oldPlist =~ shortVersionPattern)[0][1] as long) + 1
+
+        def longVersionPattern = /(?ms)<key>CFBundleVersion<\\/key>.*?<string>(.*?)<\\/string>/
+        long newLongVersion = ((oldPlist =~ longVersionPattern)[0][1] as long) + 1
+
+        String newPlist = oldPlist.replaceAll(shortVersionPattern, "<key>CFBundleShortVersionString</key>\n\t<string>${newShortVersion}</string>")
+                .replaceAll(longVersionPattern, "<key>CFBundleVersion</key>\n\t<string>${newLongVersion}</string>")
+
+        appPlist.withWriter { w ->
+            w.write(newPlist)
         }
     }
 }
 
-task deploy(dependsOn: ['build']) << {
-    exec {
-        commandLine = ['git', 'add', '-u']
-        workingDir = new File('./build')
-    }
-    exec {
-        commandLine = ['git', 'add', '.']
-        workingDir = new File('./build')
-    }
-    exec {
-        commandLine = ['git', 'commit', '-m', '"Building"']
-        workingDir = new File('./build')
-    }
-    exec {
-        commandLine = ['git', 'push', 'build', 'master']
-        workingDir = new File('./build')
-    }
-}
+task version(dependsOn: [incrementJsVersion, incrementAndroidVersion, incrementIosVersion]) << {}
 
 def execAndGetResult(def command) {
     def output = new ByteArrayOutputStream()
@@ -236,29 +245,126 @@ def execAndGetResult(def command) {
     return new JsonSlurper().parseText(output.toString())
 }
 
-final String PHONEGAP_BUILD_API_URL = "https://build.phonegap.com"
-String authToken = null
-task getAuthToken() << {
-    def authenticationResponse = execAndGetResult(['curl', '-u', 'stefankendall@gmail.com', '-X', 'POST', '-d', '""', "${PHONEGAP_BUILD_API_URL}/token"])
-    authToken = authenticationResponse.token
-}
+final List ANDROID_DRAWABLE_LOCATIONS = ['native/android/res/drawable', 'native/android/res/drawable-hdpi', 'native/android/res/drawable-ldpi'
+        , 'native/android/res/drawable-mdpi', 'native/android/res/drawable-xhdpi']
 
-task binaries(dependsOn: [getAuthToken]) << {
-    delete('binaries')
-    def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
-
-    String getIosDownloadUrlRequest = allAppsResult.apps[1].download.ios
-    String getAndroidDownloadUrlRequest = allAppsResult.apps[1].download.android
-
-    [getIosDownloadUrlRequest, getAndroidDownloadUrlRequest].each {
-        def downloadLocationResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}${it}?auth_token=${authToken}"])
-        exec {
-            commandLine = ['wget', downloadLocationResult.location, '-P', 'binaries']
+task setupAndroidAppIcons() << {
+    for (String location : ANDROID_DRAWABLE_LOCATIONS) {
+        copy {
+            from 'distribution/icons'
+            include 'icon114.png'
+            into location
+            rename { filename ->
+                'icon.png'
+            }
         }
     }
 }
 
-task buildStatus(dependsOn: [getAuthToken]) << {
-    def allAppsResult = execAndGetResult(['curl', "${PHONEGAP_BUILD_API_URL}/api/v1/apps?auth_token=${authToken}"])
-    println JsonOutput.prettyPrint(JsonOutput.toJson(allAppsResult.apps[1].status))
+task setupAndroidSplashScreens() << {
+    for (String location : ANDROID_DRAWABLE_LOCATIONS) {
+        copy {
+            from 'distribution/splashes'
+            include 'splash480x800.png'
+            into location
+            rename { filename ->
+                'splash.png'
+            }
+        }
+    }
+}
+
+task setupAndroidAppFiles() << {
+    copy {
+        from 'build'
+        exclude '.git'
+        into 'native/android/assets/www'
+    }
+}
+
+task setupAndroidPhonegapFiles() << {
+    copy {
+        from 'native/android'
+        include 'cordova-*.js'
+        into 'native/android/assets/www'
+        rename { filename ->
+            "phonegap.js"
+        }
+    }
+}
+
+task cleanAndroidAssets() << {
+    delete('./native/android/assets')
+    ANDROID_DRAWABLE_LOCATIONS.each {
+        delete(it)
+    }
+}
+
+task setupAndroidAssets(dependsOn: [setupAndroidAppIcons, setupAndroidSplashScreens, setupAndroidAppFiles, setupAndroidPhonegapFiles]) << {
+}
+
+task buildNativeAndroidRelease(dependsOn: [cleanAndroidAssets, setupAndroidAssets]) << {
+    exec {
+        commandLine = ['ant', 'clean', 'release']
+        workingDir = new File('./native/android')
+    }
+}
+
+task cleanIosAssets() << {
+    delete('./native/ios/www')
+    mkdir('./native/ios/www')
+}
+
+task setupIosAppFiles() << {
+    copy {
+        from 'build'
+        exclude '.git'
+        into 'native/ios/www'
+    }
+}
+task setupIosPhonegap() << {
+    copy {
+        from 'native/ios'
+        include 'cordova-*.js'
+        into 'native/ios/www'
+        rename { filename ->
+            "phonegap.js"
+        }
+    }
+}
+
+task setupIosIcons() << {
+    List icons = [
+            'icon144.png',
+            'icon114.png',
+            'icon72.png',
+            'icon57.png'
+    ]
+    for (String icon : icons) {
+        copy {
+            from 'distribution/icons'
+            include icons
+            into 'native/ios/'
+        }
+    }
+}
+
+task setupIosSplashScreen() << {
+    copy {
+        from 'distribution'
+        into 'build'
+        include 'splashes/**/*.png'
+    }
+}
+
+task setupIosAssets(dependsOn: [setupIosIcons, setupIosSplashScreen, setupIosPhonegap, setupIosAppFiles]) << {}
+
+task prepareIos(dependsOn: [cleanIosAssets, setupIosAssets]) << {}
+
+task copyToDropbox() << {
+    copy {
+        from 'native/android/bin'
+        into '/Users/stefankendall/Dropbox/public/Wendler531/LATEST'
+        include '*-release.apk'
+    }
 }
