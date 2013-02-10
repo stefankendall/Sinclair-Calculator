@@ -11,8 +11,7 @@ formulas.sinclair = function (bodyWeightKg, liftTotalKg, sex) {
 
     var sinclairCoefficient = x > b ? 1 : Math.pow(10,
         A * X * X);
-    var sinclairTotal = liftTotalKg * sinclairCoefficient;
-    return sinclairTotal;
+    return liftTotalKg * sinclairCoefficient;
 };
 
 formulas.sinclairMaloneMeltzer = function (bodyWeightKg, liftTotalKg, sex, age) {
