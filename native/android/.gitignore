@@ -1,0 +1,14 @@
+assets
+bin
+gen
+*.dex
+*.apk
+*.ap_.d
+*.ap_
+*.apk.d
+secure.properties
+res/drawable
+res/drawable-hdpi
+res/drawable-ldpi
+res/drawable-mdpi
+res/drawable-xhdpi
