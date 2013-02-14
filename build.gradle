@@ -364,7 +364,7 @@ task prepareIos(dependsOn: [cleanIosAssets, setupIosAssets]) << {}
 task copyToDropbox() << {
     copy {
         from 'native/android/bin'
-        into '/Users/stefankendall/Dropbox/public/Wendler531/LATEST'
+        into '/Users/stefankendall/Dropbox/public/SinclairCalculator/LATEST'
         include '*-release.apk'
     }
 }
