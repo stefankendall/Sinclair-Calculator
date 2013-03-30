@@ -212,8 +212,7 @@ task incrementAndroidVersion << {
 
 task incrementIosVersion << {
     List<File> appPlists = [
-            new File('native/ios/Wendler531/Big Lifts-Info.plist'),
-            new File('native/ios/Wendler531/WendlerPro-Info.plist')
+            new File('native/ios/SinclairCalculator/SinclairCalculator-Info.plist')
     ]
     appPlists.each { File appPlist ->
         String oldPlist = appPlist.text
