@@ -11,6 +11,8 @@
 		0288022616CC6A11008CF37A /* icon114.png in Resources */ = {isa = PBXBuildFile; fileRef = 0288022516CC6A11008CF37A /* icon114.png */; };
 		0288022816CC6A27008CF37A /* icon72.png in Resources */ = {isa = PBXBuildFile; fileRef = 0288022716CC6A27008CF37A /* icon72.png */; };
 		0288022A16CC6A33008CF37A /* icon144.png in Resources */ = {isa = PBXBuildFile; fileRef = 0288022916CC6A33008CF37A /* icon144.png */; };
+		02BA4BA91707A0E5006A0D05 /* SAiOSAdPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 02BA4BA81707A0E5006A0D05 /* SAiOSAdPlugin.m */; };
+		02BA4BAB1707A146006A0D05 /* iAd.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 02BA4BAA1707A146006A0D05 /* iAd.framework */; };
 		1D3623260D0F684500981E51 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D3623250D0F684500981E51 /* AppDelegate.m */; };
 		1D60589B0D05DD56006BFB54 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; };
 		1D60589F0D05DD5A006BFB54 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D30AB110D05D00D00671497 /* Foundation.framework */; };
@@ -68,6 +70,9 @@
 		0288022516CC6A11008CF37A /* icon114.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon114.png; sourceTree = "<group>"; };
 		0288022716CC6A27008CF37A /* icon72.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon72.png; sourceTree = "<group>"; };
 		0288022916CC6A33008CF37A /* icon144.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon144.png; sourceTree = "<group>"; };
+		02BA4BA71707A0E5006A0D05 /* SAiOSAdPlugin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SAiOSAdPlugin.h; sourceTree = "<group>"; };
+		02BA4BA81707A0E5006A0D05 /* SAiOSAdPlugin.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SAiOSAdPlugin.m; sourceTree = "<group>"; };
+		02BA4BAA1707A146006A0D05 /* iAd.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iAd.framework; path = System/Library/Frameworks/iAd.framework; sourceTree = SDKROOT; };
 		1D30AB110D05D00D00671497 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		1D3623240D0F684500981E51 /* AppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		1D3623250D0F684500981E51 /* AppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -114,6 +119,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				301BF552109A68D80062928A /* libCordova.a in Frameworks */,
+				02BA4BAB1707A146006A0D05 /* iAd.framework in Frameworks */,
 				1D60589F0D05DD5A006BFB54 /* Foundation.framework in Frameworks */,
 				1DF5F4E00D08C38300B7A737 /* UIKit.framework in Frameworks */,
 				288765FD0DF74451002DB57D /* CoreGraphics.framework in Frameworks */,
@@ -174,6 +180,7 @@
 		29B97314FDCFA39411CA2CEA /* CustomTemplate */ = {
 			isa = PBXGroup;
 			children = (
+				02BA4BAA1707A146006A0D05 /* iAd.framework */,
 				0288022916CC6A33008CF37A /* icon144.png */,
 				0288022716CC6A27008CF37A /* icon72.png */,
 				0288022516CC6A11008CF37A /* icon114.png */,
@@ -249,6 +256,8 @@
 		307C750510C5A3420062BCA9 /* Plugins */ = {
 			isa = PBXGroup;
 			children = (
+				02BA4BA71707A0E5006A0D05 /* SAiOSAdPlugin.h */,
+				02BA4BA81707A0E5006A0D05 /* SAiOSAdPlugin.m */,
 			);
 			name = Plugins;
 			path = SinclairCalculator/Plugins;
@@ -414,6 +423,7 @@
 				1D60589B0D05DD56006BFB54 /* main.m in Sources */,
 				1D3623260D0F684500981E51 /* AppDelegate.m in Sources */,
 				302D95F114D2391D003F00A1 /* MainViewController.m in Sources */,
+				02BA4BA91707A0E5006A0D05 /* SAiOSAdPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
