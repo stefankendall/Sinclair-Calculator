@@ -1,6 +1,4 @@
 (function () {
-    document.addEventListener("deviceready", onDeviceReady, false);
-
     function iAdBannerViewDidFailToReceiveAdWithErrorEventHandler(evt) {
         window.plugins.iAdPlugin.showAd(false);
     }
@@ -17,7 +15,10 @@
         var adAtBottom = true;
         setTimeout(function () {
             window.plugins.iAdPlugin.prepare(adAtBottom);
+            window.plugins.iAdPlugin.showAd(true);
         }, 1000);
         window.plugins.iAdPlugin.orientationChanged(true);
     }
+
+    document.addEventListener("deviceready", onDeviceReady, false);
 })();
